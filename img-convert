@@ -1,0 +1,66 @@
+#!/bin/bash
+
+TOTAL=$#
+if [ $TOTAL -lt 1 ]; then
+	exit 1
+fi
+
+TITLE="Image converter"
+
+NEW_SIZE=`zenity --entry --title="$TITLE" --text="Size [WxH! or Wx or xH or S%]:" --width=300 --entry-text="100%"`
+if [ "$NEW_SIZE" == "" ]; then
+	exit 1
+fi
+
+NEW_QUALITY=`zenity --entry --title="$TITLE" --text="Quality [1 - 100]:" --width=300 --entry-text="100"`
+if [ "$NEW_QUALITY" == "" ]; then
+	exit 1
+fi
+
+NEW_DIR=`xdg-user-dir DOWNLOAD`
+if [ $TOTAL -gt 1 ]; then
+	NEW_DIR="$NEW_DIR/$$"
+fi
+
+MASK=`zenity --entry --title="$TITLE" --text="Output [/path/to/file-name-mask/*.ext]:" --width=300 --entry-text="$NEW_DIR/*.jpg"`
+if [ "$MASK" == "" ]; then
+	exit 1
+fi
+
+NEW_PATH=`dirname "$MASK"`
+if [ ! -d "$NEW_PATH" ]; then
+	mkdir "$NEW_PATH"
+	if [ ! -d "$NEW_PATH" ]; then
+		zenity --info --text "Cannot create $NEW_PATH"
+		exit 2
+	fi
+fi
+
+NUM=0
+(while [ $NUM -lt $TOTAL ]
+do
+	if [ -f "$1" ]; then
+		F_NAME_EXT=`basename -- "$1"`
+		F_NAME="${F_NAME_EXT%.*}"
+		F_EXT="${F_NAME_EXT##*.}"
+		OUT=`echo "$MASK" | sed "s/\*/$F_NAME/i"`
+		if [ -f "$OUT" ]; then
+			OUT=`echo "$MASK" | sed "s/\*/$F_NAME~$$/i"`
+		fi
+		# zenity --info --text "$OUT"
+		if [[ "$F_EXT" == "CR2" || "$F_EXT" == "cr2" || "$F_EXT" == "NEF" || "$F_EXT" == "nef" || "$F_EXT" == "DNG" || "$F_EXT" == "dng" ]]; then
+			dcraw -c "$1" | convert - -resize "$NEW_SIZE" -quality "$NEW_QUALITY" "$OUT"
+		else
+			convert "$1" -resize "$NEW_SIZE" -quality "$NEW_QUALITY" "$OUT"
+		fi
+	fi
+	let NUM=$NUM+1
+	shift
+done) | zenity --progress --title="$TITLE" --text="Converting..." --pulsate --auto-close --auto-kill
+
+OLD_PATH=`pwd`
+if [ "$OLD_PATH" != "$NEW_PATH" ]; then
+	xdg-open "$NEW_PATH"
+fi
+
+exit 0
